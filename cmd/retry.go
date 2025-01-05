@@ -72,7 +72,7 @@ func runRetry(cmd *cobra.Command, args []string) error {
 	}
 
 	loadOpts := []digraph.LoadOption{
-		digraph.WithBaseConfig(cfg.Paths.BaseConfig),
+		digraph.WithBaseConfigAndCheckout(cfg.Paths.BaseConfig, cfg.Paths.CheckoutDir),
 	}
 
 	if status.Status.Params != "" {

@@ -111,6 +111,7 @@ func (l *ConfigLoader) setDefaultValues(resolver PathResolver) {
 	viper.SetDefault("paths.logDir", resolver.LogsDir)
 	viper.SetDefault("paths.adminLogsDir", resolver.AdminLogsDir)
 	viper.SetDefault("paths.baseConfig", resolver.BaseConfigFile)
+	viper.SetDefault("paths.checkoutDir", resolver.CheckoutDir)
 
 	// Server settings
 	viper.SetDefault("host", "127.0.0.1")
@@ -179,6 +180,8 @@ func (l *ConfigLoader) bindEnvironmentVariables() {
 	l.bindEnv("suspendFlagsDir", "SUSPEND_FLAGS_DIR")
 	l.bindEnv("adminLogsDir", "ADMIN_LOG_DIR")
 	l.bindEnv("executable", "EXECUTABLE")
+	l.bindEnv("checkoutDir", "CHECKOUT_DIR")
+
 
 	// UI customization
 	l.bindEnv("latestStatusToday", "LATEST_STATUS_TODAY")

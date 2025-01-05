@@ -1,0 +1,26 @@
+name: subworkflow_parent
+description: This is the parent DAG.
+steps:
+  - name: capture_combined
+    command: bash
+    script: |
+      echo hello;
+      echo world;
+    output: COMBINED_OUTPUT  # Capture the combined output of both commands in the variable COMBINED_OUTPUT
+  - name: use_combined_output
+    command: bash
+    script: |
+      echo $COMBINED_OUTPUT
+    depends:
+      - capture_combined
+  - name: step1
+    command: echo "This is step 1 in the parent DAG"
+  - name: subworkflow_step
+    run: subworkflow.yaml
+    params: "param1=value1 param2=value2"
+    depends:
+      - step1
+  - name: final_step
+    command: echo "This is the final step in the parent DAG"
+    depends:
+      - subworkflow_step

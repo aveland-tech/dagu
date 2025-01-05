@@ -117,7 +117,9 @@ type stepDef struct {
 	// Run is a sub workflow to run
 	Run string
 	// Params is the parameters for the sub workflow
-	Params string
+	Params any
+	// Uses is the remote workflow to run
+	Uses string
 }
 
 // funcDef defines a function in the DAG.
@@ -171,4 +173,29 @@ type mailConfigDef struct {
 type mailOnDef struct {
 	Failure bool // Send mail on failure
 	Success bool // Send mail on success
+}
+
+type CheckFileDef struct {
+	Name        string
+	Description string
+	Author      string
+	Branding    struct {
+		Icon  string
+		Color string
+	}
+	Secrets map[string]struct {
+		Description string
+		Required    bool
+	}
+	Inputs map[string]struct {
+		Description string
+		Required    bool
+	}
+	Outputs map[string]struct {
+		Description string
+	}
+	Runs struct {
+		Using          string
+		ExecutionPoint string
+	}
 }

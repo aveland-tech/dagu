@@ -56,6 +56,8 @@ type Step struct {
 	SignalOnStop string `json:"SignalOnStop,omitempty"`
 	// SubWorkflow contains the information about a sub DAG to be executed.
 	SubWorkflow *SubWorkflow `json:"SubWorkflow,omitempty"`
+	// RemoteWorkflow contains the information about a remote workflow (DAG) to be executed.
+	RemoteWorkflow *RemoteWorkflow `json:"RemoteWorkflow,omitempty"`
 }
 
 // setup sets the default values for the step.
@@ -133,4 +135,23 @@ type RepeatPolicy struct {
 type ContinueOn struct {
 	Failure bool // Failure is the flag to continue to the next step on failure.
 	Skipped bool // Skipped is the flag to continue to the next step on skipped.
+}
+
+// ExecutorTypeRemoteWorkflow is defined here in order to parse
+// the `uses` field in the DAG file.
+const ExecutorTypeRemoteWorkflow = "remoteWorkflow"
+
+// RemoteWorkflow contains information about a remote DAG to be executed.
+// maybe keep here the path to the check.yaml file.
+type RemoteWorkflow struct {
+	Owner       string
+	Name        string
+	Ref         string
+	Params      string
+	CheckoutDir string
+}
+
+// FullName returns the full name of the remote workflow in the format 'owner/name'.
+func (rw *RemoteWorkflow) FullName() string {
+	return fmt.Sprintf("%s/%s", rw.Owner, rw.Name)
 }

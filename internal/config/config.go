@@ -108,6 +108,7 @@ type PathsConfig struct {
 	SuspendFlagsDir string `mapstructure:"suspendFlagsDir"`
 	AdminLogsDir    string `mapstructure:"adminLogsDir"`
 	BaseConfig      string `mapstructure:"baseConfig"`
+	CheckoutDir     string `mapstructure:"checkoutDir"`
 }
 
 type UI struct {

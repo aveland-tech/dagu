@@ -28,14 +28,29 @@
             ]
         },
         {
-            "name": "Hello World",
+            "name": "Checks",
             "type": "go",
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceFolder}/cmd/",
             "args": [
                 "start",
-                "${workspaceFolder}/examples/hello_world.yaml"
+                "${workspaceFolder}/examples/checks.yaml"
+            ],
+            "env": {
+                "CHECKOUT_DIR": "DENI",
+                "DAGS_DIR": "DENI"
+            }
+        },
+        {
+            "name": "Subworkflows",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/cmd/",
+            "args": [
+                "start",
+                "${workspaceFolder}/examples/subworkflow_parent.yaml"
             ]
         }
     ]

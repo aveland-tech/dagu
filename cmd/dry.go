@@ -39,7 +39,7 @@ func runDry(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 
 	loadOpts := []digraph.LoadOption{
-		digraph.WithBaseConfig(setup.cfg.Paths.BaseConfig),
+		digraph.WithBaseConfigAndCheckout(setup.cfg.Paths.BaseConfig, setup.cfg.Paths.CheckoutDir),
 	}
 
 	var params string

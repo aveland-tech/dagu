@@ -107,6 +107,14 @@ func (sc *Scheduler) Schedule(ctx context.Context, graph *ExecutionGraph, done c
 		defer cancel()
 	}
 
+	if err := SyncRemoteWorkflows(ctx, sc, graph); err != nil {
+		return err
+	}
+
+	if err := CheckInitialErrors(sc, graph); err != nil {
+		return err
+	}
+
 	for !sc.isFinished(graph) {
 		if sc.isCanceled() {
 			break

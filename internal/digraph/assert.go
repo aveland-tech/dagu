@@ -44,7 +44,7 @@ func assertStepDef(def stepDef, funcs []*funcDef) error {
 	// TODO: Validate executor config for each executor type.
 
 	if def.Command == nil {
-		if def.Executor == nil && def.Script == "" && def.Call == nil && def.Run == "" {
+		if def.Executor == nil && def.Script == "" && def.Call == nil && def.Run == "" && def.Uses == "" {
 			return errStepCommandIsRequired
 		}
 	}

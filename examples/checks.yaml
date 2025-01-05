@@ -1,0 +1,14 @@
+steps:
+  - name: install axios
+    command: npm -g install axios
+  - name: all code changes via Pull Requests
+    uses: GitRealm/dagu-check-tickets@main
+    depends:
+        - install axios
+    params: 
+      - baseRef: 'refs/tags/v1.0.0'
+      - headRef: 'refs/tags/v1.0.1'
+      - owner: 'GitRealm'
+      - repo: 'test-check'
+      - token: '${PAT}'
+      - home: ${HOME}

@@ -1,0 +1,11 @@
+steps:
+  - name: pass 'hello'
+    command: echo hello
+    output: OUT1
+  - name: output 'hello world'
+    command: bash
+    output: OUT2
+    script: |
+      echo $OUT1 world
+    depends:
+      - pass 'hello'

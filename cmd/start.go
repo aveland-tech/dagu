@@ -58,7 +58,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 	ctx := setup.loggerContext(cmd.Context(), quiet)
 
 	loadOpts := []digraph.LoadOption{
-		digraph.WithBaseConfig(setup.cfg.Paths.BaseConfig),
+		digraph.WithBaseConfigAndCheckout(setup.cfg.Paths.BaseConfig, setup.cfg.Paths.CheckoutDir),
 	}
 
 	var params string

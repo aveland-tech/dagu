@@ -28,6 +28,7 @@ type LoadOptions struct {
 	paramsList   []string // List of parameters to override default parameters in the DAG.
 	noEval       bool     // Flag to disable evaluation of dynamic fields.
 	onlyMetadata bool     // Flag to load only metadata without full DAG details.
+	checkoutDir  string   // Directory to checkout the repository.
 }
 
 // LoadOption is a function type for setting LoadOptions.
@@ -82,6 +83,7 @@ func Load(ctx context.Context, dag string, opts ...LoadOption) (*DAG, error) {
 			parametersList: options.paramsList,
 			onlyMetadata:   options.onlyMetadata,
 			noEval:         options.noEval,
+			checkoutDir:    options.checkoutDir,
 		},
 	}
 	return loadDAG(buildContext, dag)
@@ -99,6 +101,7 @@ func LoadYAML(ctx context.Context, data []byte, opts ...LoadOption) (*DAG, error
 		parametersList: options.paramsList,
 		onlyMetadata:   options.onlyMetadata,
 		noEval:         options.noEval,
+		checkoutDir:    options.checkoutDir,
 	})
 }
 
@@ -287,4 +290,12 @@ func decode(cm map[string]any) (*definition, error) {
 func merge(dst, src *DAG) error {
 	return mergo.Merge(dst, src, mergo.WithOverride,
 		mergo.WithTransformers(&mergeTransformer{}))
+}
+
+// WithBaseConfig sets the base DAG configuration file.
+func WithBaseConfigAndCheckout(baseDAG string, checkoutDir string) LoadOption {
+	return func(o *LoadOptions) {
+		o.baseConfig = baseDAG
+		o.checkoutDir = checkoutDir
+	}
 }

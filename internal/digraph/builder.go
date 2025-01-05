@@ -5,6 +5,7 @@ package digraph
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -49,6 +50,8 @@ type buildOpts struct {
 	parametersList []string
 	// noEval specifies whether to evaluate dynamic fields.
 	noEval bool
+	// checkoutDir specifies the directory where the remote workflows are cloned.
+	checkoutDir string
 }
 
 var builderRegistry = []builderEntry{
@@ -524,10 +527,14 @@ func buildSubWorkflow(_ BuildContext, def stepDef, step *Step) error {
 	}
 
 	// Set the step fields for the subworkflow.
-	step.SubWorkflow = &SubWorkflow{Name: name, Params: params}
+	paramsStr, err := toString(params)
+	if err != nil {
+		return err
+	}
+	step.SubWorkflow = &SubWorkflow{Name: name, Params: paramsStr}
 	step.ExecutorConfig.Type = ExecutorTypeSubWorkflow
 	step.Command = commandRun
-	step.Args = []string{name, params}
+	step.Args = []string{name, paramsStr}
 	step.CmdWithArgs = fmt.Sprintf("%s %s", name, params)
 	return nil
 }
@@ -705,3 +712,83 @@ const (
 	scheduleKeyStop    scheduleKey = "stop"
 	scheduleKeyRestart scheduleKey = "restart"
 )
+
+// buildRemoteWorkflow parses the remoteWorkflow definition and sets the step fields.
+func buildRemoteWorkflow(ctx BuildContext, def stepDef, step *Step) error {
+	uses := def.Uses
+
+	// if the uses field is not set, return nil.
+	if uses == "" {
+		return nil
+	}
+
+	remoteWorkflow, err := parseCheck(uses)
+	if err != nil {
+		return err
+	}
+
+	paramsSlice, err := buildStepParams(ctx, def, step)
+	if err != nil {
+		return err
+	}
+
+	// Set the step fields for the remote workflow.
+	paramsStr, err := toString(paramsSlice)
+	if err != nil {
+		return err
+	}
+
+	// I don't think we need to care about the command and the args here.
+	// Set the step fields for the remoteWorkflow.
+	step.RemoteWorkflow = &RemoteWorkflow{
+		Owner:       remoteWorkflow.Owner,
+		Name:        remoteWorkflow.Name,
+		Ref:         remoteWorkflow.Ref,
+		Params:      paramsStr,
+		CheckoutDir: ctx.opts.checkoutDir,
+	}
+	step.ExecutorConfig.Type = ExecutorTypeRemoteWorkflow
+	step.Command = commandRun
+	step.Args = paramsSlice
+	// step.CmdWithArgs = fmt.Sprintf("%s %s", uses, params)
+	return nil
+}
+
+// parseCheck parses a string representing a remote workflow in the format "owner/repo@ref".
+// It returns a RemoteWorkflow struct and an error if the input string is not in the expected format.
+//
+// Parameters:
+//   - check: A string in the format "owner/repo@ref".
+//
+// Returns:
+//   - RemoteWorkflow: A struct containing the owner, repository name, and reference.
+//   - error: An error if the input string is not in the expected format.
+func parseCheck(check string) (RemoteWorkflow, error) {
+	parts := strings.Split(check, "@")
+	if len(parts) != 2 {
+		return RemoteWorkflow{}, errors.New("invalid format for remote workflow. Expected 'owner/repo@ref'")
+	}
+
+	repoParts := strings.Split(parts[0], "/")
+	if len(repoParts) != 2 {
+		return RemoteWorkflow{}, errors.New("invalid repository format, expected 'owner/repo'")
+	}
+
+	repo := RemoteWorkflow{
+		Owner: repoParts[0],
+		Name:  repoParts[1],
+		Ref:   parts[1],
+	}
+
+	return repo, nil
+}
+
+func mapToStringSlice(m map[string]string) string {
+	var pairs []string
+
+	for key, value := range m {
+		pairs = append(pairs, fmt.Sprintf("%s=%s", key, value))
+	}
+
+	return strings.Join(pairs, " ")
+}

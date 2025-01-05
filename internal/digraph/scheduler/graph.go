@@ -16,13 +16,14 @@ import (
 
 // ExecutionGraph represents a graph of steps.
 type ExecutionGraph struct {
-	startedAt  time.Time
-	finishedAt time.Time
-	dict       map[int]*Node
-	nodes      []*Node
-	from       map[int][]int
-	to         map[int][]int
-	mu         sync.RWMutex
+	startedAt    time.Time
+	finishedAt   time.Time
+	dict         map[int]*Node
+	nodes        []*Node
+	from         map[int][]int
+	to           map[int][]int
+	mu           sync.RWMutex
+	remoteSynced bool
 }
 
 // NewExecutionGraph creates a new execution graph with the given steps.
@@ -254,3 +255,15 @@ var (
 	errCycleDetected = errors.New("cycle detected")
 	errStepNotFound  = errors.New("step not found")
 )
+
+func (g *ExecutionGraph) IsRemoteSynced() bool {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	return g.remoteSynced
+}
+
+func (g *ExecutionGraph) RemoteSynced() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.remoteSynced = true
+}

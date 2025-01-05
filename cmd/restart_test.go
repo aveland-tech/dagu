@@ -55,7 +55,7 @@ func TestRestartCommand(t *testing.T) {
 		dagFile.AssertCurrentStatus(t, scheduler.StatusNone)
 
 		// Check parameter was the same as the first execution
-		dag, err := digraph.Load(th.Context, dagFile.Path, digraph.WithBaseConfig(th.Config.Paths.BaseConfig))
+		dag, err := digraph.Load(th.Context, dagFile.Path, digraph.WithBaseConfigAndCheckout(th.Config.Paths.BaseConfig, th.Config.Paths.CheckoutDir))
 		require.NoError(t, err)
 
 		setup := newSetup(th.Config)
@@ -66,6 +66,58 @@ func TestRestartCommand(t *testing.T) {
 
 		require.Len(t, recentHistory, 2)
 		require.Equal(t, recentHistory[0].Status.Params, recentHistory[1].Status.Params)
+
+		<-done
+	})
+
+	t.Run("RestartDAGWithDifferentParams", func(t *testing.T) {
+		th := testSetup(t)
+		dagFile := th.DAGFile("restart.yaml")
+
+		go func() {
+			// Start a DAG to restart.
+			args := []string{"start", `--params="foo"`, dagFile.Path}
+			th.RunCommand(t, startCmd(), cmdTest{args: args})
+		}()
+
+		time.Sleep(waitForStatusUpdate)
+
+		// Wait for the DAG running.
+		dagFile.AssertCurrentStatus(t, scheduler.StatusRunning)
+
+		// Restart the DAG with different parameters.
+		done := make(chan struct{})
+		go func() {
+			args := []string{"restart", dagFile.Path, `--params="bar"`}
+			th.RunCommand(t, restartCmd(), cmdTest{args: args})
+			close(done)
+		}()
+
+		time.Sleep(waitForStatusUpdate)
+
+		// Wait for the DAG running again.
+		dagFile.AssertCurrentStatus(t, scheduler.StatusRunning)
+
+		// Stop the restarted DAG.
+		th.RunCommand(t, stopCmd(), cmdTest{args: []string{"stop", dagFile.Path}})
+
+		time.Sleep(waitForStatusUpdate)
+
+		// Wait for the DAG is stopped.
+		dagFile.AssertCurrentStatus(t, scheduler.StatusNone)
+
+		// Check parameter was updated
+		dag, err := digraph.Load(th.Context, dagFile.Path, digraph.WithBaseConfigAndCheckout(th.Config.Paths.BaseConfig, th.Config.Paths.CheckoutDir))
+		require.NoError(t, err)
+
+		setup := newSetup(th.Config)
+		client, err := setup.client()
+		require.NoError(t, err)
+
+		recentHistory := client.GetRecentHistory(context.Background(), dag, 2)
+
+		require.Len(t, recentHistory, 2)
+		require.NotEqual(t, recentHistory[0].Status.Params, recentHistory[1].Status.Params)
 
 		<-done
 	})

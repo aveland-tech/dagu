@@ -6,5 +6,5 @@
   "features": {
     "ghcr.io/devcontainers/features/node:1": {}
   },
-  "postCreateCommand": "make build-ui"
+  "postCreateCommand": "echo 'alias ll=\"ls -la\"' >> ~/.bashrc && make build-ui"
 }

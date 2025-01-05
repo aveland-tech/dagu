@@ -45,7 +45,7 @@ type testDAG struct {
 func (td *testDAG) AssertCurrentStatus(t *testing.T, expected scheduler.Status) {
 	t.Helper()
 
-	dag, err := digraph.Load(td.Context, td.Path, digraph.WithBaseConfig(td.Config.Paths.BaseConfig))
+	dag, err := digraph.Load(td.Context, td.Path, digraph.WithBaseConfigAndCheckout(td.Config.Paths.BaseConfig, td.Config.Paths.CheckoutDir))
 	require.NoError(t, err)
 
 	cli := td.Client
@@ -56,11 +56,11 @@ func (td *testDAG) AssertCurrentStatus(t *testing.T, expected scheduler.Status) 
 	}, waitForStatusTimeout, tick)
 }
 
-func (th *testDAG) AssertLastStatus(t *testing.T, expected scheduler.Status) {
+func (td *testDAG) AssertLastStatus(t *testing.T, expected scheduler.Status) {
 	t.Helper()
 
 	require.Eventually(t, func() bool {
-		status := th.HistoryStore.ReadStatusRecent(th.Context, th.Path, 1)
+		status := td.HistoryStore.ReadStatusRecent(td.Context, td.Path, 1)
 		if len(status) < 1 {
 			return false
 		}

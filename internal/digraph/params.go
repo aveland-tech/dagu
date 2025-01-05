@@ -304,3 +304,53 @@ func (p paramPair) Escaped() string {
 	}
 	return fmt.Sprintf("%q", p.Value)
 }
+
+// buildStepParams builds the parameters for the DAG.
+func buildStepParams(ctx BuildContext, spec stepDef, step *Step) ([]string, error) {
+	var (
+		paramPairs []paramPair
+		envs       []string
+		argsSlice  []string
+	)
+
+	if err := parseParams(ctx, spec.Params, &paramPairs, &envs); err != nil {
+		return nil, err
+	}
+
+	for _, paramPair := range paramPairs {
+		argsSlice = append(argsSlice, paramPair.String())
+	}
+
+	return argsSlice, nil
+}
+
+// parseParamValue parses the parameters for the DAG.
+func toString(input any) (string, error) {
+	switch v := input.(type) {
+	case nil:
+		return "", nil
+
+	case string:
+		return v, nil
+
+	case map[string]string:
+		return mapToString(v), nil
+
+	case []string:
+		return strings.Join(v, " "), nil
+
+	default:
+		return "", wrapError("params", v, fmt.Errorf("%w: %T", errInvalidParamValue, v))
+
+	}
+}
+
+func mapToString(m map[string]string) string {
+	var pairs []string
+
+	for key, value := range m {
+		pairs = append(pairs, fmt.Sprintf("%s=%s", key, value))
+	}
+
+	return strings.Join(pairs, " ")
+}
