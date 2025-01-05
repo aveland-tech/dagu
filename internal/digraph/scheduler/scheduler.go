@@ -104,7 +104,7 @@ func (sc *Scheduler) Schedule(ctx context.Context, graph *ExecutionGraph, done c
 		defer cancel()
 	}
 
-	if err := SyncRemoteWorkflows(ctx, sc, graph); err != nil {
+	if err := SyncCapsules(ctx, sc, graph); err != nil {
 		return err
 	}
 

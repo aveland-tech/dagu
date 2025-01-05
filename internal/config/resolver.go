@@ -57,7 +57,7 @@ func (r *PathResolver) setXDGPaths() {
 	r.AdminLogsDir = filepath.Join(r.DataHome, build.Slug, "logs", "admin")
 	r.SuspendFlagsDir = filepath.Join(r.DataHome, build.Slug, "suspend")
 	r.DAGsDir = filepath.Join(r.ConfigHome, build.Slug, "dags")
-	r.CheckoutDir = filepath.Join(r.DataHome, build.Slug, "checks")
+	r.CheckoutDir = filepath.Join(r.DataHome, build.Slug, "capsules")
 }
 
 func (r *PathResolver) setLegacyPaths() {
@@ -67,5 +67,5 @@ func (r *PathResolver) setLegacyPaths() {
 	r.AdminLogsDir = filepath.Join(r.ConfigDir, "logs", "admin")
 	r.SuspendFlagsDir = filepath.Join(r.ConfigDir, "suspend")
 	r.DAGsDir = filepath.Join(r.ConfigDir, "dags")
-	r.CheckoutDir = filepath.Join(r.DataHome, build.Slug, "checks")
+	r.CheckoutDir = filepath.Join(r.DataHome, build.Slug, "capsules")
 }

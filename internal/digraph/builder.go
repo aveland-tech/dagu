@@ -85,6 +85,7 @@ var stepBuilderRegistry = []stepBuilderEntry{
 	{name: "repeatPolicy", fn: buildRepeatPolicy},
 	{name: "signalOnStop", fn: buildSignalOnStop},
 	{name: "precondition", fn: buildStepPrecondition},
+	{name: "capsule", fn: buildCapsule},
 }
 
 type stepBuilderEntry struct {
@@ -791,8 +792,8 @@ const (
 	scheduleKeyRestart scheduleKey = "restart"
 )
 
-// buildRemoteWorkflow parses the remoteWorkflow definition and sets the step fields.
-func buildRemoteWorkflow(ctx BuildContext, def stepDef, step *Step) error {
+// buildCapsule parses the remote capsule definition and sets the step fields.
+func buildCapsule(ctx BuildContext, def stepDef, step *Step) error {
 	uses := def.Uses
 
 	// if the uses field is not set, return nil.
@@ -800,7 +801,7 @@ func buildRemoteWorkflow(ctx BuildContext, def stepDef, step *Step) error {
 		return nil
 	}
 
-	remoteWorkflow, err := parseCheck(uses)
+	capsule, err := parseCapsule(uses)
 	if err != nil {
 		return err
 	}
@@ -817,56 +818,46 @@ func buildRemoteWorkflow(ctx BuildContext, def stepDef, step *Step) error {
 	}
 
 	// I don't think we need to care about the command and the args here.
-	// Set the step fields for the remoteWorkflow.
-	step.RemoteWorkflow = &RemoteWorkflow{
-		Owner:       remoteWorkflow.Owner,
-		Name:        remoteWorkflow.Name,
-		Ref:         remoteWorkflow.Ref,
+	// Set the step fields for the capsule.
+	step.Capsule = &Capsule{
+		Owner:       capsule.Owner,
+		Name:        capsule.Name,
+		Ref:         capsule.Ref,
 		Params:      paramsStr,
 		CheckoutDir: ctx.opts.checkoutDir,
 	}
-	step.ExecutorConfig.Type = ExecutorTypeRemoteWorkflow
+	step.ExecutorConfig.Type = ExecutorTypeCapsule
 	step.Command = commandRun
 	step.Args = paramsSlice
 	// step.CmdWithArgs = fmt.Sprintf("%s %s", uses, params)
 	return nil
 }
 
-// parseCheck parses a string representing a remote workflow in the format "owner/repo@ref".
-// It returns a RemoteWorkflow struct and an error if the input string is not in the expected format.
+// parseCapsule parses a string representing a remote capsule in the format "owner/repo@ref".
+// It returns a Capsule struct and an error if the input string is not in the expected format.
 //
 // Parameters:
-//   - check: A string in the format "owner/repo@ref".
+//   - capsule: A string in the format "owner/repo@ref".
 //
 // Returns:
-//   - RemoteWorkflow: A struct containing the owner, repository name, and reference.
+//   - Capsule: A struct containing the owner, repository name, and reference.
 //   - error: An error if the input string is not in the expected format.
-func parseCheck(check string) (RemoteWorkflow, error) {
-	parts := strings.Split(check, "@")
+func parseCapsule(capsule string) (Capsule, error) {
+	parts := strings.Split(capsule, "@")
 	if len(parts) != 2 {
-		return RemoteWorkflow{}, errors.New("invalid format for remote workflow. Expected 'owner/repo@ref'")
+		return Capsule{}, errors.New("invalid format for remote workflow. Expected 'owner/repo@ref'")
 	}
 
 	repoParts := strings.Split(parts[0], "/")
 	if len(repoParts) != 2 {
-		return RemoteWorkflow{}, errors.New("invalid repository format, expected 'owner/repo'")
+		return Capsule{}, errors.New("invalid repository format, expected 'owner/repo'")
 	}
 
-	repo := RemoteWorkflow{
+	repo := Capsule{
 		Owner: repoParts[0],
 		Name:  repoParts[1],
 		Ref:   parts[1],
 	}
 
 	return repo, nil
-}
-
-func mapToStringSlice(m map[string]string) string {
-	var pairs []string
-
-	for key, value := range m {
-		pairs = append(pairs, fmt.Sprintf("%s=%s", key, value))
-	}
-
-	return strings.Join(pairs, " ")
 }

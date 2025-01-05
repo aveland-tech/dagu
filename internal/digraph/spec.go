@@ -170,7 +170,7 @@ type mailOnDef struct {
 	Success bool // Send mail on success
 }
 
-type CheckFileDef struct {
+type CapsuleFileDef struct {
 	Name        string
 	Description string
 	Author      string

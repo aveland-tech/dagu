@@ -1,9 +1,9 @@
 package executor
 
 import (
-	 _ "embed" 
 	"bytes"
 	"context"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -24,12 +24,12 @@ import (
 //go:embed node/encapsulated_execution.js
 var encapsulatedExecutionJS []byte
 
-type remoteWorkflow struct {
+type capsule struct {
 	cmd  *exec.Cmd
 	lock sync.Mutex
 }
 
-func newRemoteWorkflow(ctx context.Context, step digraph.Step) (Executor, error) {
+func newCapsule(ctx context.Context, step digraph.Step) (Executor, error) {
 	if len(step.Dir) > 0 && !fileutil.FileExists(step.Dir) {
 		return nil, fmt.Errorf("directory %q does not exist", step.Dir)
 	}
@@ -41,8 +41,8 @@ func newRemoteWorkflow(ctx context.Context, step digraph.Step) (Executor, error)
 		return nil, fmt.Errorf("failed to convert args to JSON: %w", err)
 	}
 
-	checksYAML := fmt.Sprintf("%s/%s", getCheckDir(*step.RemoteWorkflow), "check.yaml")
-	raw, err := readFile(checksYAML)
+	capsulesYAML := fmt.Sprintf("%s/%s", getCapsuleDir(*step.Capsule), "capsule.yaml")
+	raw, err := readFile(capsulesYAML)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +63,7 @@ func newRemoteWorkflow(ctx context.Context, step digraph.Step) (Executor, error)
 		return nil, fmt.Errorf("failed to write embedded JavaScript to temporary file: %w", err)
 	}
 
-	userScript := filepath.Join(getCheckDir(*step.RemoteWorkflow), def.Runs.ExecutionPoint)
+	userScript := filepath.Join(getCapsuleDir(*step.Capsule), def.Runs.ExecutionPoint)
 	checkDef, err := json.Marshal(def)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal def to JSON: %w", err)
@@ -74,7 +74,10 @@ func newRemoteWorkflow(ctx context.Context, step digraph.Step) (Executor, error)
 	step.Args = args
 	step.Command = def.Runs.Using
 
-	cmd := createCommand(ctx, step)
+	cmd, err := createCommand(ctx, step)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create command: %w", err)
+	}
 	cmd.Env = append(cmd.Env, stepContext.AllEnvs()...)
 	cmd.Dir = step.Dir
 
@@ -83,10 +86,10 @@ func newRemoteWorkflow(ctx context.Context, step digraph.Step) (Executor, error)
 		Pgid:    0,
 	}
 
-	return &remoteWorkflow{cmd: cmd}, nil
+	return &capsule{cmd: cmd}, nil
 }
 
-func (e *remoteWorkflow) Run(_ context.Context) error {
+func (e *capsule) Run(_ context.Context) error {
 	e.lock.Lock()
 	err := e.cmd.Start()
 	e.lock.Unlock()
@@ -96,15 +99,15 @@ func (e *remoteWorkflow) Run(_ context.Context) error {
 	return e.cmd.Wait()
 }
 
-func (e *remoteWorkflow) SetStdout(out io.Writer) {
+func (e *capsule) SetStdout(out io.Writer) {
 	e.cmd.Stdout = out
 }
 
-func (e *remoteWorkflow) SetStderr(out io.Writer) {
+func (e *capsule) SetStderr(out io.Writer) {
 	e.cmd.Stderr = out
 }
 
-func (e *remoteWorkflow) Kill(sig os.Signal) error {
+func (e *capsule) Kill(sig os.Signal) error {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 	if e.cmd == nil || e.cmd.Process == nil {
@@ -114,11 +117,11 @@ func (e *remoteWorkflow) Kill(sig os.Signal) error {
 }
 
 func init() {
-	Register(digraph.ExecutorTypeRemoteWorkflow, newRemoteWorkflow)
+	Register(digraph.ExecutorTypeCapsule, newCapsule)
 }
 
-func getCheckDir(remoteWorkflow digraph.RemoteWorkflow) string {
-	return fmt.Sprintf("%s/%s/%s/%s", remoteWorkflow.CheckoutDir, remoteWorkflow.Owner, remoteWorkflow.Name, remoteWorkflow.Ref)
+func getCapsuleDir(capsule digraph.Capsule) string {
+	return fmt.Sprintf("%s/%s/%s/%s", capsule.CheckoutDir, capsule.Owner, capsule.Name, capsule.Ref)
 }
 
 // readFile reads the contents of the file into a map.
@@ -147,8 +150,8 @@ var (
 )
 
 // decode decodes the configuration map into a configDefinition.
-func decode(cm map[string]any) (*digraph.CheckFileDef, error) {
-	c := new(digraph.CheckFileDef)
+func decode(cm map[string]any) (*digraph.CapsuleFileDef, error) {
+	c := new(digraph.CapsuleFileDef)
 	md, _ := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
 		ErrorUnused: true,
 		Result:      c,

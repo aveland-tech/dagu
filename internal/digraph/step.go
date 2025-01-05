@@ -53,8 +53,8 @@ type Step struct {
 	SignalOnStop string `json:"SignalOnStop,omitempty"`
 	// SubWorkflow contains the information about a sub DAG to be executed.
 	SubWorkflow *SubWorkflow `json:"SubWorkflow,omitempty"`
-	// RemoteWorkflow contains the information about a remote workflow (DAG) to be executed.
-	RemoteWorkflow *RemoteWorkflow `json:"RemoteWorkflow,omitempty"`
+	// Capsule contains the information about a remote workflow (DAG) to be executed.
+	Capsule *Capsule `json:"Capsule,omitempty"`
 }
 
 // setup sets the default values for the step.
@@ -134,13 +134,13 @@ type ContinueOn struct {
 	Skipped bool // Skipped is the flag to continue to the next step on skipped.
 }
 
-// ExecutorTypeRemoteWorkflow is defined here in order to parse
+// ExecutorTypeCapsule is defined here in order to parse
 // the `uses` field in the DAG file.
-const ExecutorTypeRemoteWorkflow = "remoteWorkflow"
+const ExecutorTypeCapsule = "capsule"
 
-// RemoteWorkflow contains information about a remote DAG to be executed.
-// maybe keep here the path to the check.yaml file.
-type RemoteWorkflow struct {
+// Capsule contains information about a remote DAG to be executed.
+// maybe keep here the path to the capsule.yaml file.
+type Capsule struct {
 	Owner       string
 	Name        string
 	Ref         string
@@ -149,6 +149,6 @@ type RemoteWorkflow struct {
 }
 
 // FullName returns the full name of the remote workflow in the format 'owner/name'.
-func (rw *RemoteWorkflow) FullName() string {
+func (rw *Capsule) FullName() string {
 	return fmt.Sprintf("%s/%s", rw.Owner, rw.Name)
 }
