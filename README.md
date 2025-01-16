@@ -168,8 +168,7 @@ steps:
     command: echo Hello $NAME
   - name: Done
     command: echo Done!
-    depends:
-      - Hello world
+    depends: Hello world
 ```
 
 ### 4. Execute the DAG
@@ -275,7 +274,9 @@ remoteNodes:
 
 ## **Example DAG**
 
-### Minimal DAG Definition
+### Minimal examples
+
+```yaml
 
 A DAG with two steps:
 
@@ -305,12 +306,21 @@ Specifying a shell:
 steps:
   - name: step 1
     command: echo hello world | xargs echo
-    shell: bash
+    shell: bash # The default shell is `$SHELL` or `sh`.
 ```
 
-Note: The default shell is `$SHELL` or `sh`.
+You can also define each steps as map instead of list:
 
-### Complex DAG Definition
+```yaml
+steps:
+  step1:
+    command: echo "Hello"
+  step2:
+    command: echo "Bye"
+    depends: step1
+```
+
+### Complex examples
 
 A typical data pipeline for DevOps/Data Engineering scenarios:
 
@@ -341,8 +351,7 @@ steps:
   # Step 1: Pull the latest data from a data source
   - name: pull_data
     command: "sh"
-    script: |
-      echo `date '+%Y-%m-%d'`
+    script: echo `date '+%Y-%m-%d'`
     output: DATE
 
   # Step 2: Cleanse and prepare the data
@@ -427,6 +436,12 @@ Dagu is a single command line tool that uses the local file system to store data
 Feel free to contribute in any way you want! Share ideas, questions, submit issues, and create pull requests. Check out our [Contribution Guide](https://dagu.readthedocs.io/en/latest/contrib.html) for help getting started.
 
 We welcome any and all contributions!
+
+## **Contributors**
+
+<a href="https://github.com/dagu-org/dagu/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=dagu-org/dagu" />
+</a>
 
 ## **License**
 

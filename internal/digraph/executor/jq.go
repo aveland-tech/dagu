@@ -9,9 +9,11 @@ import (
 	"strings"
 
 	"github.com/dagu-org/dagu/internal/digraph"
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/itchyny/gojq"
-	"github.com/mitchellh/mapstructure"
 )
+
+var _ Executor = (*jq)(nil)
 
 type jq struct {
 	stdout io.Writer

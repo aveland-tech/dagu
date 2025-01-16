@@ -27,8 +27,7 @@ Hello World
       command: echo Hello $NAME
     - name: Done
       command: echo Done!
-      depends:
-        - Hello world
+      depends: Hello world
 
 Using pipes (``|``) in commands:
 
@@ -57,6 +56,36 @@ Running a script:
       script: |
         echo hello world
         echo goodbye world
+
+Multiple dependencies:
+
+.. code-block:: yaml
+
+  steps:
+    - name: step 1
+      command: echo hello
+    - name: step 2
+      command: echo world
+    - name: step 3
+      command: echo hello world
+      depends:
+        - step 1
+        - step 2
+
+Define steps as map:
+
+.. code-block:: yaml
+
+  steps:
+    step1:
+      command: echo hello
+    step2:
+      command: echo world
+    step3:
+      command: echo hello world
+      depends:
+        - step1
+        - step2
 
 Schema Definition
 ~~~~~~~~~~~~~~~~
@@ -198,6 +227,33 @@ Send output to files:
       command: "echo error message >&2"
       stderr: "/tmp/error.txt"
 
+You can use JSON references in fields to dynamically expand values from variables. JSON references are denoted using the ``${NAME.path.to.value}`` syntax, where ``NAME`` refers to a variable name and ``path.to.value`` specifies the path in the JSON to resolve. If the data is not JSON format, the value will not be expanded.
+
+Examples:
+
+.. code-block:: yaml
+
+  steps:
+    - name: sub workflow
+      run: sub_workflow
+      output: SUB_RESULT
+    - name: use output
+      command: echo "The result is ${SUB_RESULT.outputs.finalValue}"
+      depends:
+        - sub workflow
+
+If ``SUB_RESULT`` contains:
+
+.. code-block:: json
+
+  {
+    "outputs": {
+      "finalValue": "success"
+    }
+  }
+
+Then the expanded value of ``${SUB_RESULT.outputs.finalValue}`` will be ``success``.
+
 Conditional Execution
 ------------------
 
@@ -246,9 +302,31 @@ Use command substitution in conditions:
         - condition: "`date '+%d'`"
           expected: "01"
 
+Use regex in conditions:
+
+.. code-block:: yaml
+
+  steps:
+    - name: monthly task
+      command: monthly.sh
+      preconditions:
+        - condition: "`date '+%d'`"
+          expected: "re:0[1-9]" # Run only if the day is between 01 and 09
+
 Continue on Failure
 ~~~~~~~~~~~~~~~~~
-Control flow when conditions aren't met:
+
+Continue to the next step even if the current step fails: 
+
+.. code-block:: yaml
+
+  steps:
+    - name: optional task
+      command: task.sh
+      continueOn:
+        failure: true
+
+Continue to the next step even if the current step skipped by preconditions:
 
 .. code-block:: yaml
 
@@ -260,6 +338,59 @@ Control flow when conditions aren't met:
           expected: "01"
       continueOn:
         skipped: true
+
+Based on exit code:
+
+.. code-block:: yaml
+
+  steps:
+    - name: optional task
+      command: task.sh
+      continueOn:
+        exitCode: [1, 2] # Continue if exit code is 1 or 2
+  
+Based on output:
+
+.. code-block:: yaml
+
+  steps:
+    - name: optional task
+      command: task.sh
+      continueOn:
+        output: "error" # Continue if output (stdout or stderr) contains "error"  
+
+Use regular expressions:
+
+.. code-block:: yaml
+
+  steps:
+    - name: optional task
+      command: task.sh
+      continueOn:
+        output: "re:SUCCE.*" # Continue if output (stdout or stderr) matches "SUCCE.*"
+
+Multiple output conditions:
+
+.. code-block:: yaml
+
+  steps:
+    - name: optional task
+      command: task.sh
+      continueOn:
+        output:
+          - "complete"
+          - "re:SUCCE.*"
+
+Mark as Success even if the step fails but continue to the next step:
+
+.. code-block:: yaml
+
+  steps:
+    - name: optional task
+      command: task.sh
+      continueOn:
+        output: "complete"
+        markSuccess: true # default is false
 
 Scheduling
 ---------
@@ -491,6 +622,7 @@ Example DAG configuration:
     precondition:                       
       - condition: "`echo $2`"           
         expected: "param2"               
+      - command: "test -f file.txt"
     mailOn:
       failure: true                      
       success: true                      
@@ -546,6 +678,8 @@ Example step configuration:
         continueOn:
           failure: true                  
           skipped: true                  
+          exitCode: [1, 2]
+          markSuccess: true
         retryPolicy:                     
           limit: 2                       
           intervalSec: 5                 

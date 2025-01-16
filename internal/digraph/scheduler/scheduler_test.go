@@ -93,6 +93,18 @@ func TestScheduler(t *testing.T) {
 		result.AssertNodeStatus(t, "3", scheduler.NodeStatusSuccess)
 		result.AssertNodeStatus(t, "4", scheduler.NodeStatusSuccess)
 	})
+	t.Run("ComplexCommand", func(t *testing.T) {
+		sc := setup(t, withMaxActiveRuns(1))
+
+		graph := sc.newGraph(t,
+			newStep("1",
+				withCommand("df / | awk 'NR==2 {exit $4 > 5000 ? 0 : 1}'"),
+			))
+
+		result := graph.Schedule(t, scheduler.StatusSuccess)
+
+		result.AssertDoneCount(t, 1)
+	})
 	t.Run("ContinueOnFailure", func(t *testing.T) {
 		sc := setup(t)
 
@@ -102,7 +114,9 @@ func TestScheduler(t *testing.T) {
 			newStep("2",
 				withDepends("1"),
 				withCommand("false"),
-				withContinueOnFailure(),
+				withContinueOn(digraph.ContinueOn{
+					Failure: true,
+				}),
 			),
 			successStep("3", "2"),
 		)
@@ -128,7 +142,9 @@ func TestScheduler(t *testing.T) {
 					Condition: "`echo 1`",
 					Expected:  "0",
 				}),
-				withContinueOnSkipped(),
+				withContinueOn(digraph.ContinueOn{
+					Skipped: true,
+				}),
 			),
 			successStep("3", "2"),
 		)
@@ -140,6 +156,118 @@ func TestScheduler(t *testing.T) {
 		result.AssertNodeStatus(t, "1", scheduler.NodeStatusSuccess)
 		result.AssertNodeStatus(t, "2", scheduler.NodeStatusSkipped)
 		result.AssertNodeStatus(t, "3", scheduler.NodeStatusSuccess)
+	})
+	t.Run("ContinueOnExitCode", func(t *testing.T) {
+		sc := setup(t)
+
+		// 1 (exit code 1) -> 2
+		graph := sc.newGraph(t,
+			newStep("1",
+				withCommand("false"),
+				withContinueOn(digraph.ContinueOn{
+					ExitCode: []int{1},
+				}),
+			),
+			successStep("2", "1"),
+		)
+
+		result := graph.Schedule(t, scheduler.StatusError)
+
+		// 1, 2 should be executed even though 1 failed
+		result.AssertDoneCount(t, 2)
+		result.AssertNodeStatus(t, "1", scheduler.NodeStatusError)
+		result.AssertNodeStatus(t, "2", scheduler.NodeStatusSuccess)
+	})
+	t.Run("ContinueOnOutputStdout", func(t *testing.T) {
+		sc := setup(t)
+
+		// 1 (exit code 1) -> 2
+		graph := sc.newGraph(t,
+			newStep("1",
+				withCommand("echo test_output; false"), // stdout: test_output
+				withContinueOn(digraph.ContinueOn{
+					Output: []string{
+						"test_output",
+					},
+				}),
+			),
+			successStep("2", "1"),
+		)
+
+		result := graph.Schedule(t, scheduler.StatusError)
+
+		// 1, 2 should be executed even though 1 failed
+		result.AssertDoneCount(t, 2)
+		result.AssertNodeStatus(t, "1", scheduler.NodeStatusError)
+		result.AssertNodeStatus(t, "2", scheduler.NodeStatusSuccess)
+	})
+	t.Run("ContinueOnOutputStderr", func(t *testing.T) {
+		sc := setup(t)
+
+		// 1 (exit code 1) -> 2
+		graph := sc.newGraph(t,
+			newStep("1",
+				withCommand("echo test_output; false 1>&2"), // stderr: test_output
+				withContinueOn(digraph.ContinueOn{
+					Output: []string{
+						"test_output",
+					},
+				}),
+			),
+			successStep("2", "1"),
+		)
+
+		result := graph.Schedule(t, scheduler.StatusError)
+
+		// 1, 2 should be
+		result.AssertDoneCount(t, 2)
+		result.AssertNodeStatus(t, "1", scheduler.NodeStatusError)
+		result.AssertNodeStatus(t, "2", scheduler.NodeStatusSuccess)
+	})
+	t.Run("ContinueOnOutputRegexp", func(t *testing.T) {
+		sc := setup(t)
+
+		// 1 (exit code 1) -> 2
+		graph := sc.newGraph(t,
+			newStep("1",
+				withCommand("echo test_output; false"), // stdout: test_output
+				withContinueOn(digraph.ContinueOn{
+					Output: []string{
+						"re:^test_[a-z]+$",
+					},
+				}),
+			),
+			successStep("2", "1"),
+		)
+
+		result := graph.Schedule(t, scheduler.StatusError)
+
+		// 1, 2 should be executed even though 1 failed
+		result.AssertDoneCount(t, 2)
+		result.AssertNodeStatus(t, "1", scheduler.NodeStatusError)
+		result.AssertNodeStatus(t, "2", scheduler.NodeStatusSuccess)
+	})
+	t.Run("ContinueOnMarkSuccess", func(t *testing.T) {
+		sc := setup(t)
+
+		// 1 (exit code 1) -> 2
+		graph := sc.newGraph(t,
+			newStep("1",
+				withCommand("false"),
+				withContinueOn(digraph.ContinueOn{
+					ExitCode:    []int{1},
+					MarkSuccess: true,
+				}),
+			),
+			successStep("2", "1"),
+		)
+
+		result := graph.Schedule(t, scheduler.StatusSuccess)
+
+		// 1, 2 should be executed even though 1 failed
+		result.AssertDoneCount(t, 2)
+		result.AssertNodeStatus(t, "1", scheduler.NodeStatusSuccess)
+		result.AssertNodeStatus(t, "2", scheduler.NodeStatusSuccess)
 	})
 	t.Run("CancelSchedule", func(t *testing.T) {
 		sc := setup(t)
@@ -531,6 +659,53 @@ func TestScheduler(t *testing.T) {
 		require.True(t, ok, "output variable not found")
 		require.Equal(t, "RESULT=hello", output, "expected output %q, got %q", "hello", output)
 	})
+	t.Run("OutputInheritance", func(t *testing.T) {
+		sc := setup(t)
+
+		// 1: echo hello > OUT
+		// 2: echo world > OUT2 (depends on 1)
+		// 3: echo $OUT $OUT2 > RESULT (depends on 2)
+		// RESULT should be "hello world"
+		graph := sc.newGraph(t,
+			newStep("1", withCommand("echo hello"), withOutput("OUT")),
+			newStep("2", withCommand("echo world"), withOutput("OUT2"), withDepends("1")),
+			newStep("3", withCommand("echo $OUT $OUT2"), withDepends("2"), withOutput("RESULT")),
+			newStep("4", withCommand("sleep 1")),
+			// 5 should not have reference to OUT or OUT2
+			newStep("5", withCommand("echo $OUT $OUT2"), withDepends("4"), withOutput("RESULT2")),
+		)
+
+		result := graph.Schedule(t, scheduler.StatusSuccess)
+
+		result.AssertDoneCount(t, 5)
+
+		node := result.Node(t, "3")
+		output, _ := node.Data().Step.OutputVariables.Load("RESULT")
+		require.Equal(t, "RESULT=hello world", output, "expected output %q, got %q", "hello world", output)
+
+		node2 := result.Node(t, "5")
+		output2, _ := node2.Data().Step.OutputVariables.Load("RESULT2")
+		require.Equal(t, "RESULT2=", output2, "expected output %q, got %q", "", output)
+	})
+	t.Run("OutputJSONReference", func(t *testing.T) {
+		sc := setup(t)
+
+		jsonData := `{"key": "value"}`
+		graph := sc.newGraph(t,
+			newStep("1", withCommand(fmt.Sprintf("echo '%s'", jsonData)), withOutput("OUT")),
+			newStep("2", withCommand("echo ${OUT.key}"), withDepends("1"), withOutput("RESULT")),
+		)
+
+		result := graph.Schedule(t, scheduler.StatusSuccess)
+
+		result.AssertDoneCount(t, 2)
+
+		// check if RESULT variable is set to "value"
+		node := result.Node(t, "2")
+
+		output, _ := node.Data().Step.OutputVariables.Load("RESULT")
+		require.Equal(t, "RESULT=value", output, "expected output %q, got %q", "value", output)
+	})
 	t.Run("SpecialVars_DAG_EXECUTION_LOG_PATH", func(t *testing.T) {
 		sc := setup(t)
 
@@ -633,15 +808,9 @@ func withDepends(depends ...string) stepOption {
 	}
 }
 
-func withContinueOnFailure() stepOption {
+func withContinueOn(c digraph.ContinueOn) stepOption {
 	return func(step *digraph.Step) {
-		step.ContinueOn.Failure = true
-	}
-}
-
-func withContinueOnSkipped() stepOption {
-	return func(step *digraph.Step) {
-		step.ContinueOn.Skipped = true
+		step.ContinueOn = c
 	}
 }
 

@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/dagu-org/dagu/internal/cmdutil"
 	"github.com/dagu-org/dagu/internal/fileutil"
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/joho/godotenv"
 	"golang.org/x/sys/unix"
 )
@@ -78,6 +80,7 @@ type builderEntry struct {
 
 var stepBuilderRegistry = []stepBuilderEntry{
 	{name: "command", fn: buildCommand},
+	{name: "depends", fn: buildDepends},
 	{name: "executor", fn: buildExecutor},
 	{name: "subworkflow", fn: buildSubWorkflow},
 	{name: "continueOn", fn: buildContinueOn},
@@ -265,7 +268,7 @@ func buildDotenv(ctx BuildContext, spec *definition, dag *DAG) error {
 
 		resolver := fileutil.NewFileResolver(relativeTos)
 		for _, filePath := range dag.Dotenv {
-			filePath, err := cmdutil.EvalString(filePath)
+			filePath, err := cmdutil.EvalString(ctx.ctx, filePath)
 			if err != nil {
 				return wrapError("dotenv", filePath, fmt.Errorf("failed to evaluate dotenv file path %s: %w", filePath, err))
 			}
@@ -455,16 +458,53 @@ func skipIfSuccessful(_ BuildContext, spec *definition, dag *DAG) error {
 
 // buildSteps builds the steps for the DAG.
 func buildSteps(ctx BuildContext, spec *definition, dag *DAG) error {
-	var steps []Step
-	for _, stepDef := range spec.Steps {
-		step, err := buildStep(ctx, stepDef, spec.Functions)
-		if err != nil {
-			return err
+	switch v := spec.Steps.(type) {
+	case nil:
+		return nil
+
+	case []any:
+		var stepDefs []stepDef
+		md, _ := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+			ErrorUnused: true,
+			Result:      &stepDefs,
+		})
+		if err := md.Decode(v); err != nil {
+			return wrapError("steps", v, err)
 		}
-		steps = append(steps, *step)
+		for _, stepDef := range stepDefs {
+			step, err := buildStep(ctx, stepDef, spec.Functions)
+			if err != nil {
+				return err
+			}
+			dag.Steps = append(dag.Steps, *step)
+		}
+
+		return nil
+
+	case map[any]any:
+		stepDefs := make(map[string]stepDef)
+		md, _ := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+			ErrorUnused: true,
+			Result:      &stepDefs,
+		})
+		if err := md.Decode(v); err != nil {
+			return wrapError("steps", v, err)
+		}
+		for name, stepDef := range stepDefs {
+			stepDef.Name = name
+			step, err := buildStep(ctx, stepDef, spec.Functions)
+			if err != nil {
+				return err
+			}
+			dag.Steps = append(dag.Steps, *step)
+		}
+
+		return nil
+
+	default:
+		return wrapError("steps", v, errStepsMustBeArrayOrMap)
+
 	}
-	dag.Steps = steps
-	return nil
 }
 
 // buildSMTPConfig builds the SMTP configuration for the DAG.
@@ -518,7 +558,6 @@ func buildStep(ctx BuildContext, def stepDef, fns []*funcDef) (*Step, error) {
 		Stderr:         def.Stderr,
 		Output:         def.Output,
 		Dir:            def.Dir,
-		Depends:        def.Depends,
 		MailOnError:    def.MailOnError,
 		ExecutorConfig: ExecutorConfig{Config: make(map[string]any)},
 	}
@@ -538,10 +577,25 @@ func buildStep(ctx BuildContext, def stepDef, fns []*funcDef) (*Step, error) {
 }
 
 func buildContinueOn(_ BuildContext, def stepDef, step *Step) error {
-	if def.ContinueOn != nil {
-		step.ContinueOn.Skipped = def.ContinueOn.Skipped
-		step.ContinueOn.Failure = def.ContinueOn.Failure
+	if def.ContinueOn == nil {
+		return nil
 	}
+	step.ContinueOn.Skipped = def.ContinueOn.Skipped
+	step.ContinueOn.Failure = def.ContinueOn.Failure
+	step.ContinueOn.MarkSuccess = def.ContinueOn.MarkSuccess
+
+	exitCodes, err := parseIntOrArray(def.ContinueOn.ExitCode)
+	if err != nil {
+		return wrapError("continueOn.exitCode", def.ContinueOn.ExitCode, errContinueOnExitCodeMustBeIntOrArray)
+	}
+	step.ContinueOn.ExitCode = exitCodes
+
+	output, err := parseStringOrArray(def.ContinueOn.Output)
+	if err != nil {
+		return wrapError("continueOn.stdout", def.ContinueOn.Output, errContinueOnOutputMustBeStringOrArray)
+	}
+	step.ContinueOn.Output = output
+
 	return nil
 }
 
@@ -635,6 +689,16 @@ const (
 	executorKeyType   = "type"
 	executorKeyConfig = "config"
 )
+
+func buildDepends(_ BuildContext, def stepDef, step *Step) error {
+	deps, err := parseStringOrArray(def.Depends)
+	if err != nil {
+		return wrapError("depends", def.Depends, errDependsMustBeStringOrArray)
+	}
+	step.Depends = deps
+
+	return nil
+}
 
 // buildExecutor parses the executor field in the step definition.
 // Case 1: executor is nil
@@ -784,13 +848,63 @@ func extractParamNames(command string) []string {
 	return params
 }
 
-type scheduleKey string
+func parseIntOrArray(v any) ([]int, error) {
+	switch v := v.(type) {
+	case nil:
+		return nil, nil
 
-const (
-	scheduleKeyStart   scheduleKey = "start"
-	scheduleKeyStop    scheduleKey = "stop"
-	scheduleKeyRestart scheduleKey = "restart"
-)
+	case int:
+		return []int{v}, nil
+
+	case []any:
+		var ret []int
+		for _, vv := range v {
+			i, ok := vv.(int)
+			if !ok {
+				return nil, fmt.Errorf("int or array expected, got %T", vv)
+			}
+			ret = append(ret, i)
+		}
+		return ret, nil
+
+	case string:
+		// try to parse the string as an integer
+		exitCode, err := strconv.Atoi(v)
+		if err != nil {
+			return nil, fmt.Errorf("int or array expected, got %T", v)
+		}
+		return []int{exitCode}, nil
+
+	default:
+		return nil, fmt.Errorf("int or array expected, got %T", v)
+
+	}
+}
+
+func parseStringOrArray(v any) ([]string, error) {
+	switch v := v.(type) {
+	case nil:
+		return nil, nil
+
+	case string:
+		return []string{v}, nil
+
+	case []any:
+		var ret []string
+		for _, vv := range v {
+			s, ok := vv.(string)
+			if !ok {
+				return nil, fmt.Errorf("string or array expected, got %T", vv)
+			}
+			ret = append(ret, s)
+		}
+		return ret, nil
+
+	default:
+		return nil, fmt.Errorf("string or array expected, got %T", v)
+
+	}
+}
 
 // buildCapsule parses the remote capsule definition and sets the step fields.
 func buildCapsule(ctx BuildContext, def stepDef, step *Step) error {
